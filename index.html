@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Official Netball Scorer</title>
+    <title>Netball Scorer Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { overscroll-behavior-y: none; }
+        body { overscroll-behavior-y: none; background-color: #f1f5f9; }
         * { -webkit-tap-highlight-color: transparent; }
         .tab-active { border-bottom: 3px solid #3b82f6; color: #1e40af; }
     </style>
 </head>
-<body class="bg-slate-100">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
@@ -28,34 +28,22 @@
         const Play = (p) => <IconBase {...p}><polygon points="5 3 19 12 5 21 5 3"></polygon></IconBase>;
         const Pause = (p) => <IconBase {...p}><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></IconBase>;
         const RotateCcw = (p) => <IconBase {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></IconBase>;
+        const UndoIcon = (p) => <IconBase {...p}><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></IconBase>;
         const Trash = (p) => <IconBase {...p}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></IconBase>;
 
         const App = () => {
-            const [homeName, setHomeName] = useState('Home Team');
-            const [awayName, setAwayName] = useState('Away Team');
+            const [homeName, setHomeName] = useState('Home');
+            const [awayName, setAwayName] = useState('Away');
             const [logs, setLogs] = useState([]); 
             const [timeLeft, setTimeLeft] = useState(900);
             const [isRunning, setIsRunning] = useState(false);
             const [quarter, setQuarter] = useState(1);
             const [activeTab, setActiveTab] = useState('score');
-            
-            // Logic state
-            const [firstCenterPassOfMatch, setFirstCenterPassOfMatch] = useState(null); 
-            const [manualCenterPass, setManualCenterPass] = useState(null);
+            const [baseCenterPass, setBaseCenterPass] = useState('home');
 
-            // Corrected Netball Center Pass Logic:
-            // It alternates every time a goal is scored, regardless of WHICH team scored.
             const currentCenterPass = useMemo(() => {
-                if (manualCenterPass) return manualCenterPass;
-                if (!firstCenterPassOfMatch) return null;
-                
-                // Sequence logic: The team that takes the center pass alternates after every goal.
-                const totalGoals = logs.length;
-                const isEven = totalGoals % 2 === 0;
-                
-                if (isEven) return firstCenterPassOfMatch;
-                return firstCenterPassOfMatch === 'home' ? 'away' : 'home';
-            }, [logs.length, firstCenterPassOfMatch, manualCenterPass]);
+                return (logs.length % 2 === 0) ? baseCenterPass : (baseCenterPass === 'home' ? 'away' : 'home');
+            }, [logs.length, baseCenterPass]);
 
             useEffect(() => {
                 let interval = null;
@@ -70,36 +58,17 @@
             const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
             const addGoal = (team, shooter) => {
-                if (!firstCenterPassOfMatch) {
-                    alert("Please select who has the first center pass of the match first!");
-                    return;
-                }
-                const newGoal = {
-                    id: Date.now(),
-                    team,
-                    shooter,
-                    quarter,
-                    time: formatTime(timeLeft)
-                };
+                const newGoal = { id: Date.now(), team, shooter, quarter, time: formatTime(timeLeft) };
                 setLogs([newGoal, ...logs]);
-                setManualCenterPass(null); // Reset manual override after a goal moves the sequence forward
             };
 
-            const removeGoal = (id) => {
-                if(confirm("Remove this goal? The center pass will automatically revert to the correct team.")) {
-                    setLogs(logs.filter(l => l.id !== id));
-                    setManualCenterPass(null);
-                }
+            const undoLast = () => {
+                if (logs.length > 0) setLogs(logs.slice(1));
             };
 
             const resetGame = () => {
-                if(confirm("Reset entire match?")) {
-                    setLogs([]);
-                    setQuarter(1);
-                    setTimeLeft(900);
-                    setIsRunning(false);
-                    setFirstCenterPassOfMatch(null);
-                    setManualCenterPass(null);
+                if(confirm("Reset match data?")) {
+                    setLogs([]); setQuarter(1); setTimeLeft(900); setIsRunning(false);
                 }
             };
 
@@ -107,124 +76,99 @@
             const awayScore = logs.filter(l => l.team === 'away').length;
 
             return (
-                <div className="max-w-xl mx-auto min-h-screen flex flex-col font-sans">
-                    {/* Header */}
-                    <div className="bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-lg">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-xl font-black italic tracking-widest text-blue-400">NETBALL PRO</span>
-                            <div className="bg-slate-800 px-3 py-1 rounded-full text-xs font-bold uppercase">Quarter {quarter}</div>
+                <div className="max-w-xl mx-auto min-h-screen flex flex-col font-sans select-none pb-8">
+                    <div className="bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-md">
+                        <div className="flex justify-between items-center mb-3">
+                            <span className="text-lg font-black italic text-blue-400 tracking-wider">NETBALL PRO</span>
+                            <div className="bg-slate-800 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">Quarter {quarter}</div>
                         </div>
-                        
-                        <div className="flex items-center justify-between bg-slate-800 rounded-2xl p-4">
-                            <div className="text-4xl font-mono font-bold tabular-nums">{formatTime(timeLeft)}</div>
+                        <div className="flex items-center justify-between bg-slate-800 rounded-xl p-3 border border-slate-700">
+                            <div className="text-3xl font-mono font-bold tabular-nums">{formatTime(timeLeft)}</div>
                             <div className="flex gap-2">
-                                <button onClick={() => setIsRunning(!isRunning)} className={`p-3 rounded-full transition-colors ${isRunning ? 'bg-amber-500' : 'bg-emerald-500'}`}>
-                                    {isRunning ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}
+                                <button onClick={() => setIsRunning(!isRunning)} className={`p-2.5 rounded-full transition-all active:scale-90 ${isRunning ? 'bg-amber-500 shadow-amber-900/20' : 'bg-emerald-500 shadow-emerald-900/20 shadow-lg'}`}>
+                                    {isRunning ? <Pause size={20} fill="white" /> : <Play size={20} fill="white" />}
                                 </button>
-                                <button onClick={() => setTimeLeft(900)} className="p-3 rounded-full bg-slate-700 active:bg-slate-600"><RotateCcw size={24} /></button>
+                                <button onClick={() => setTimeLeft(900)} className="p-2.5 rounded-full bg-slate-700 active:bg-slate-600 transition-colors"><RotateCcw size={20} /></button>
                             </div>
                         </div>
                     </div>
-
-                    {/* Setup Phase: Toss Winner */}
-                    {!firstCenterPassOfMatch && (
-                        <div className="p-6 bg-blue-600 text-white text-center animate-pulse">
-                            <h2 className="font-bold mb-2">Who won the toss?</h2>
-                            <p className="text-xs opacity-90 mb-4 italic">Select the team taking the First Center Pass of the match</p>
-                            <div className="flex gap-4 justify-center">
-                                <button onClick={() => setFirstCenterPassOfMatch('home')} className="bg-white text-blue-600 px-6 py-2 rounded-full font-black shadow-lg uppercase text-sm active:scale-95 transition-transform">{homeName}</button>
-                                <button onClick={() => setFirstCenterPassOfMatch('away')} className="bg-white text-blue-600 px-6 py-2 rounded-full font-black shadow-lg uppercase text-sm active:scale-95 transition-transform">{awayName}</button>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="flex bg-white border-b border-slate-200">
-                        <button onClick={() => setActiveTab('score')} className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider ${activeTab === 'score' ? 'tab-active' : 'text-slate-400'}`}>Scoring</button>
-                        <button onClick={() => setActiveTab('logs')} className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider ${activeTab === 'logs' ? 'tab-active' : 'text-slate-400'}`}>Logs ({logs.length})</button>
+                        <button onClick={() => setActiveTab('score')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-[0.15em] transition-all ${activeTab === 'score' ? 'tab-active' : 'text-slate-400'}`}>Scoring</button>
+                        <button onClick={() => setActiveTab('logs')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-[0.15em] transition-all ${activeTab === 'logs' ? 'tab-active' : 'text-slate-400'}`}>Log ({logs.length})</button>
                     </div>
 
-                    <div className="p-4 flex-1 overflow-y-auto">
+                    <div className="p-4 flex-1">
                         {activeTab === 'score' ? (
-                            <div className="flex flex-col gap-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    {/* Home Team Card */}
-                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'home' ? 'border-blue-500 ring-4 ring-blue-100 scale-[1.02]' : 'border-transparent opacity-80'}`}>
-                                        <input value={homeName} onChange={e => setHomeName(e.target.value)} className="w-full text-center font-bold text-slate-500 mb-1 bg-transparent text-sm focus:outline-none" />
+                            <div className="flex flex-col gap-5">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'home' ? 'border-blue-500 ring-4 ring-blue-50 shadow-lg translate-y-[-2px]' : 'border-transparent opacity-80'}`}>
+                                        <input value={homeName} onChange={e => setHomeName(e.target.value)} className="w-full text-center font-black text-slate-400 mb-1 bg-transparent text-[10px] uppercase outline-none" />
                                         <div className="text-6xl font-black text-center mb-4 text-blue-600 tabular-nums">{homeScore}</div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button onClick={() => addGoal('home', 'GS')} className="bg-blue-600 text-white py-4 rounded-xl font-black text-lg active:bg-blue-800 shadow-sm">GS</button>
-                                            <button onClick={() => addGoal('home', 'GA')} className="bg-blue-500 text-white py-4 rounded-xl font-black text-lg active:bg-blue-800 shadow-sm">GA</button>
+                                            <button onClick={() => addGoal('home', 'GS')} className="bg-blue-600 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-blue-800 active:scale-95 transition-all">GS</button>
+                                            <button onClick={() => addGoal('home', 'GA')} className="bg-blue-500 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-blue-700 active:scale-95 transition-all">GA</button>
                                         </div>
                                     </div>
-
-                                    {/* Away Team Card */}
-                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'away' ? 'border-rose-500 ring-4 ring-rose-100 scale-[1.02]' : 'border-transparent opacity-80'}`}>
-                                        <input value={awayName} onChange={e => setAwayName(e.target.value)} className="w-full text-center font-bold text-slate-500 mb-1 bg-transparent text-sm focus:outline-none" />
+                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'away' ? 'border-rose-500 ring-4 ring-rose-50 shadow-lg translate-y-[-2px]' : 'border-transparent opacity-80'}`}>
+                                        <input value={awayName} onChange={e => setAwayName(e.target.value)} className="w-full text-center font-black text-slate-400 mb-1 bg-transparent text-[10px] uppercase outline-none" />
                                         <div className="text-6xl font-black text-center mb-4 text-rose-600 tabular-nums">{awayScore}</div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button onClick={() => addGoal('away', 'GS')} className="bg-rose-600 text-white py-4 rounded-xl font-black text-lg active:bg-rose-800 shadow-sm">GS</button>
-                                            <button onClick={() => addGoal('away', 'GA')} className="bg-rose-500 text-white py-4 rounded-xl font-black text-lg active:bg-rose-800 shadow-sm">GA</button>
+                                            <button onClick={() => addGoal('away', 'GS')} className="bg-rose-600 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-rose-800 active:scale-95 transition-all">GS</button>
+                                            <button onClick={() => addGoal('away', 'GA')} className="bg-rose-500 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-rose-700 active:scale-95 transition-all">GA</button>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Center Pass Indicator */}
-                                <div className="flex flex-col items-center gap-2 py-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="flex flex-col items-center gap-3 py-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
                                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Next Center Pass</div>
-                                    <div className="flex items-center gap-6">
-                                        <div className={`h-4 w-4 rounded-full transition-all ${currentCenterPass === 'home' ? 'bg-blue-500 scale-125 shadow-[0_0_12px_rgba(59,130,246,0.6)]' : 'bg-slate-200'}`}></div>
-                                        <button 
-                                            onClick={() => setManualCenterPass(currentCenterPass === 'home' ? 'away' : 'home')}
-                                            className="text-[10px] font-bold text-slate-400 border border-slate-200 px-4 py-1.5 rounded-full hover:bg-slate-50 active:bg-slate-100 transition-colors uppercase"
-                                        >
-                                            Swap Turn
-                                        </button>
-                                        <div className={`h-4 w-4 rounded-full transition-all ${currentCenterPass === 'away' ? 'bg-rose-500 scale-125 shadow-[0_0_12px_rgba(244,63,94,0.6)]' : 'bg-slate-200'}`}></div>
+                                    <div className="flex items-center gap-8">
+                                        <div className={`h-4 w-4 rounded-full transition-all duration-500 ${currentCenterPass === 'home' ? 'bg-blue-500 scale-125 shadow-lg shadow-blue-200' : 'bg-slate-200'}`}></div>
+                                        <button onClick={() => setBaseCenterPass(baseCenterPass === 'home' ? 'away' : 'home')} className="text-[10px] font-bold text-slate-500 border border-slate-200 px-6 py-2 rounded-full hover:bg-slate-50 active:bg-slate-100 uppercase tracking-widest transition-colors">Toggle</button>
+                                        <div className={`h-4 w-4 rounded-full transition-all duration-500 ${currentCenterPass === 'away' ? 'bg-rose-500 scale-125 shadow-lg shadow-rose-200' : 'bg-slate-200'}`}></div>
                                     </div>
                                 </div>
 
-                                {/* Quarterly Summary */}
-                                <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                                    <h3 className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Score Sheet Breakdown</h3>
-                                    <div className="space-y-3">
+                                <div className="flex gap-3">
+                                    <button onClick={undoLast} disabled={logs.length === 0} className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 py-4 rounded-xl font-bold text-xs text-slate-600 active:bg-slate-50 disabled:opacity-30 transition-all">
+                                        <UndoIcon size={16} /> UNDO LAST
+                                    </button>
+                                    <button onClick={() => setQuarter(q => Math.min(4, q + 1))} className="flex-[1.5] bg-slate-800 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest active:bg-slate-900 shadow-lg">Next Quarter</button>
+                                </div>
+
+                                <div className="bg-white rounded-2xl p-4 border border-slate-200">
+                                    <div className="grid grid-cols-4 gap-2">
                                         {[1, 2, 3, 4].map(q => {
-                                            const qHome = logs.filter(l => l.team === 'home' && l.quarter === q).length;
-                                            const qAway = logs.filter(l => l.team === 'away' && l.quarter === q).length;
+                                            const qH = logs.filter(l => l.team === 'home' && l.quarter === q).length;
+                                            const qA = logs.filter(l => l.team === 'away' && l.quarter === q).length;
                                             return (
-                                                <div key={q} className={`flex justify-between items-center text-sm ${quarter === q ? 'font-bold text-slate-800' : 'text-slate-400'}`}>
-                                                    <span className="flex items-center gap-2">
-                                                        Quarter {q}
-                                                        {quarter === q && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>}
-                                                    </span>
-                                                    <span className="font-mono bg-slate-50 px-3 py-1 rounded-md">{qHome} - {qAway}</span>
+                                                <div key={q} className={`text-center p-3 rounded-xl border transition-all ${quarter === q ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-50' : 'bg-slate-50 border-transparent'}`}>
+                                                    <div className="text-[9px] font-bold text-slate-400 mb-1">Q{q}</div>
+                                                    <div className="text-sm font-black text-slate-700 tabular-nums">{qH}-{qA}</div>
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 </div>
-
-                                <div className="mt-4 flex gap-2">
-                                    <button onClick={() => setQuarter(q => Math.min(4, q + 1))} className="flex-1 bg-slate-800 text-white py-4 rounded-xl font-black shadow-lg active:scale-[0.98] transition-transform uppercase text-sm tracking-widest">Next Quarter</button>
-                                    <button onClick={resetGame} className="p-4 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-red-500 transition-colors"><Trash size={20} /></button>
-                                </div>
+                                <button onClick={resetGame} className="self-center mt-2 p-3 text-slate-300 hover:text-red-400 transition-colors active:scale-90"><Trash size={22} /></button>
                             </div>
                         ) : (
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-2 pb-10">
                                 {logs.length === 0 ? (
-                                    <div className="text-center py-20 text-slate-300 font-medium italic">No goals recorded yet...</div>
+                                    <div className="text-center py-20 text-slate-300 font-medium italic text-sm">No goals in the log yet...</div>
                                 ) : (
                                     logs.map((log) => (
-                                        <div key={log.id} className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-slate-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-black text-sm text-white ${log.team === 'home' ? 'bg-blue-600' : 'bg-rose-600'}`}>
+                                        <div key={log.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 shadow-sm animate-in slide-in-from-top-2 duration-300">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white shadow-sm ${log.team === 'home' ? 'bg-blue-600' : 'bg-rose-600'}`}>
                                                     {log.shooter}
                                                 </div>
                                                 <div>
-                                                    <div className="text-xs font-black text-slate-800 uppercase tracking-tight">{log.team === 'home' ? homeName : awayName}</div>
-                                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Q{log.quarter} • {log.time}</div>
+                                                    <div className="text-[11px] font-black text-slate-800 uppercase leading-none mb-1">{log.team === 'home' ? homeName : awayName}</div>
+                                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Q{log.quarter} • {log.time} Left</div>
                                                 </div>
                                             </div>
-                                            <button onClick={() => removeGoal(log.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors"><Trash size={16} /></button>
+                                            <div className="text-[10px] font-bold text-slate-200 tabular-nums">#{logs.length - logs.indexOf(log)}</div>
                                         </div>
                                     ))
                                 )}
