@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Official Netball Scorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { overscroll-behavior-y: none; }
+        * { -webkit-tap-highlight-color: transparent; }
+        .tab-active { border-bottom: 3px solid #3b82f6; color: #1e40af; }
+    </style>
+</head>
+<body class="bg-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- Icons ---
+        const IconBase = ({ size = 20, children, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+        const Play = (p) => <IconBase {...p}><polygon points="5 3 19 12 5 21 5 3"></polygon></IconBase>;
+        const Pause = (p) => <IconBase {...p}><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></IconBase>;
+        const RotateCcw = (p) => <IconBase {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></IconBase>;
+        const Trash = (p) => <IconBase {...p}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></IconBase>;
+
+        const App = () => {
+            const [homeName, setHomeName] = useState('Home Team');
+            const [awayName, setAwayName] = useState('Away Team');
+            const [logs, setLogs] = useState([]); 
+            const [timeLeft, setTimeLeft] = useState(900);
+            const [isRunning, setIsRunning] = useState(false);
+            const [quarter, setQuarter] = useState(1);
+            const [centerPass, setCenterPass] = useState('home');
+            const [activeTab, setActiveTab] = useState('score');
+
+            const homeScore = useMemo(() => logs.filter(l => l.team === 'home').length, [logs]);
+            const awayScore = useMemo(() => logs.filter(l => l.team === 'away').length, [logs]);
+
+            useEffect(() => {
+                let interval = null;
+                if (isRunning && timeLeft > 0) {
+                    interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
+                } else if (timeLeft === 0) {
+                    setIsRunning(false);
+                }
+                return () => clearInterval(interval);
+            }, [isRunning, timeLeft]);
+
+            const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+
+            const addGoal = (team, shooter) => {
+                const newGoal = {
+                    id: Date.now(),
+                    team,
+                    shooter,
+                    quarter,
+                    time: formatTime(timeLeft)
+                };
+                setLogs([newGoal, ...logs]);
+                setCenterPass(team === 'home' ? 'away' : 'home');
+            };
+
+            const removeGoal = (id) => {
+                if(confirm("Remove this goal from official record?")) {
+                    setLogs(logs.filter(l => l.id !== id));
+                }
+            };
+
+            const resetGame = () => {
+                if(confirm("Reset entire match? All logs will be lost.")) {
+                    setLogs([]);
+                    setQuarter(1);
+                    setTimeLeft(900);
+                    setIsRunning(false);
+                }
+            };
+
+            const QuarterSummary = () => {
+                const qData = [1, 2, 3, 4].map(q => ({
+                    q,
+                    home: logs.filter(l => l.team === 'home' && l.quarter === q).length,
+                    away: logs.filter(l => l.team === 'away' && l.quarter === q).length
+                }));
+
+                return (
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mt-4">
+                        <h3 className="text-sm font-bold text-slate-500 uppercase mb-3">Quarterly Breakdown</h3>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                            {qData.map(d => (
+                                <div key={d.q} className={`p-2 rounded-lg ${quarter === d.q ? 'bg-blue-50 border border-blue-200' : 'bg-slate-50'}`}>
+                                    <div className="text-xs font-bold text-slate-400">Q{d.q}</div>
+                                    <div className="text-sm font-black text-slate-700">{d.home}-{d.away}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="max-w-xl mx-auto min-h-screen flex flex-col">
+                    <div className="bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-lg">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-xl font-black italic tracking-widest text-blue-400">NETBALL PRO</span>
+                            <div className="bg-slate-800 px-3 py-1 rounded-full text-xs font-bold">QUARTER {quarter}</div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between bg-slate-800 rounded-2xl p-4">
+                            <div className="text-4xl font-mono font-bold">{formatTime(timeLeft)}</div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsRunning(!isRunning)} className={`p-3 rounded-full ${isRunning ? 'bg-amber-500' : 'bg-emerald-500'}`}>
+                                    {isRunning ? <Pause size={24} fill="white" /> : <Play size={24} fill="white" />}
+                                </button>
+                                <button onClick={() => setTimeLeft(900)} className="p-3 rounded-full bg-slate-700"><RotateCcw size={24} /></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex bg-white border-b border-slate-200">
+                        <button onClick={() => setActiveTab('score')} className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider ${activeTab === 'score' ? 'tab-active' : 'text-slate-400'}`}>Scoring</button>
+                        <button onClick={() => setActiveTab('logs')} className={`flex-1 py-4 font-bold text-sm uppercase tracking-wider ${activeTab === 'logs' ? 'tab-active' : 'text-slate-400'}`}>Logs ({logs.length})</button>
+                    </div>
+
+                    <div className="p-4 flex-1 overflow-y-auto">
+                        {activeTab === 'score' ? (
+                            <div className="flex flex-col gap-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all ${centerPass === 'home' ? 'border-blue-500 ring-4 ring-blue-100' : 'border-transparent shadow-sm'}`}>
+                                        <input value={homeName} onChange={e => setHomeName(e.target.value)} className="w-full text-center font-bold text-slate-500 mb-2 bg-transparent" />
+                                        <div className="text-6xl font-black text-center mb-4 text-blue-600">{homeScore}</div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={() => addGoal('home', 'GS')} className="bg-blue-600 text-white py-4 rounded-xl font-black text-lg shadow-md active:translate-y-1">GS</button>
+                                            <button onClick={() => addGoal('home', 'GA')} className="bg-blue-500 text-white py-4 rounded-xl font-black text-lg shadow-md active:translate-y-1">GA</button>
+                                        </div>
+                                    </div>
+
+                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all ${centerPass === 'away' ? 'border-rose-500 ring-4 ring-rose-100' : 'border-transparent shadow-sm'}`}>
+                                        <input value={awayName} onChange={e => setAwayName(e.target.value)} className="w-full text-center font-bold text-slate-500 mb-2 bg-transparent" />
+                                        <div className="text-6xl font-black text-center mb-4 text-rose-600">{awayScore}</div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={() => addGoal('away', 'GS')} className="bg-rose-600 text-white py-4 rounded-xl font-black text-lg shadow-md active:translate-y-1">GS</button>
+                                            <button onClick={() => addGoal('away', 'GA')} className="bg-rose-500 text-white py-4 rounded-xl font-black text-lg shadow-md active:translate-y-1">GA</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center items-center gap-4 py-2">
+                                    <div className={`h-2 w-2 rounded-full ${centerPass === 'home' ? 'bg-blue-500 scale-150' : 'bg-slate-300'}`}></div>
+                                    <button onClick={() => setCenterPass(prev => prev === 'home' ? 'away' : 'home')} className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-white px-4 py-1 rounded-full border border-slate-200">Toggle Center Pass</button>
+                                    <div className={`h-2 w-2 rounded-full ${centerPass === 'away' ? 'bg-rose-500 scale-150' : 'bg-slate-300'}`}></div>
+                                </div>
+
+                                <QuarterSummary />
+
+                                <div className="mt-4 flex gap-2">
+                                    <button onClick={() => setQuarter(q => Math.min(4, q + 1))} className="flex-1 bg-slate-800 text-white py-3 rounded-xl font-bold text-sm">Next Quarter</button>
+                                    <button onClick={resetGame} className="p-3 bg-white border border-slate-200 rounded-xl text-slate-400"><Trash size={20} /></button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                {logs.length === 0 ? (
+                                    <div className="text-center py-20 text-slate-400 font-medium">No goals recorded yet.</div>
+                                ) : (
+                                    logs.map((log) => (
+                                        <div key={log.id} className="flex items-center justify-between bg-white p-3 rounded-xl shadow-sm border border-slate-100">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs text-white ${log.team === 'home' ? 'bg-blue-500' : 'bg-rose-500'}`}>
+                                                    {log.shooter}
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-bold text-slate-800">{log.team === 'home' ? homeName : awayName}</div>
+                                                    <div className="text-[10px] text-slate-400 font-bold uppercase">Q{log.quarter} • {log.time}</div>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => removeGoal(log.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash size={16} /></button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
