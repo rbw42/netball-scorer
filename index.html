@@ -11,7 +11,7 @@
     <style>
         body { overscroll-behavior-y: none; background-color: #f1f5f9; }
         * { -webkit-tap-highlight-color: transparent; }
-        .tab-active { border-bottom: 3px solid #3b82f6; color: #1e40af; }
+        .tab-active { border-bottom: 3px solid #f43f5e; color: #9f1239; }
     </style>
 </head>
 <body>
@@ -19,6 +19,12 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
+
+        const getStorage = (key, fallback) => {
+            const saved = localStorage.getItem(key);
+            if (!saved) return fallback;
+            try { return JSON.parse(saved); } catch { return fallback; }
+        };
 
         const IconBase = ({ size = 20, children, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -32,28 +38,51 @@
         const Trash = (p) => <IconBase {...p}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></IconBase>;
 
         const App = () => {
-            const [homeName, setHomeName] = useState('Home');
-            const [awayName, setAwayName] = useState('Away');
-            const [logs, setLogs] = useState([]); 
-            const [timeLeft, setTimeLeft] = useState(900);
+            const [homeName, setHomeName] = useState(() => getStorage('nb_homeName', 'Home'));
+            const [awayName, setAwayName] = useState(() => getStorage('nb_awayName', 'Away'));
+            const [logs, setLogs] = useState(() => getStorage('nb_logs', [])); 
+            const [timeLeft, setTimeLeft] = useState(() => getStorage('nb_timeLeft', 900));
+            const [quarter, setQuarter] = useState(() => getStorage('nb_quarter', 1));
+            const [baseCenterPass, setBaseCenterPass] = useState(() => getStorage('nb_basePass', 'home'));
+            
             const [isRunning, setIsRunning] = useState(false);
-            const [quarter, setQuarter] = useState(1);
             const [activeTab, setActiveTab] = useState('score');
-            const [baseCenterPass, setBaseCenterPass] = useState('home');
 
-            const currentCenterPass = useMemo(() => {
-                return (logs.length % 2 === 0) ? baseCenterPass : (baseCenterPass === 'home' ? 'away' : 'home');
-            }, [logs.length, baseCenterPass]);
+            useEffect(() => { localStorage.setItem('nb_homeName', JSON.stringify(homeName)); }, [homeName]);
+            useEffect(() => { localStorage.setItem('nb_awayName', JSON.stringify(awayName)); }, [awayName]);
+            useEffect(() => { localStorage.setItem('nb_logs', JSON.stringify(logs)); }, [logs]);
+            useEffect(() => { localStorage.setItem('nb_timeLeft', JSON.stringify(timeLeft)); }, [timeLeft]);
+            useEffect(() => { localStorage.setItem('nb_quarter', JSON.stringify(quarter)); }, [quarter]);
+            useEffect(() => { localStorage.setItem('nb_basePass', JSON.stringify(baseCenterPass)); }, [baseCenterPass]);
 
             useEffect(() => {
                 let interval = null;
                 if (isRunning && timeLeft > 0) {
-                    interval = setInterval(() => setTimeLeft(t => t - 1), 1000);
-                } else if (timeLeft === 0) {
-                    setIsRunning(false);
+                    let lastRealTime = Date.now();
+                    
+                    interval = setInterval(() => {
+                        const now = Date.now();
+                        const secondsPassed = Math.floor((now - lastRealTime) / 1000);
+                        
+                        if (secondsPassed >= 1) {
+                            setTimeLeft(t => {
+                                const newTime = t - secondsPassed;
+                                if (newTime <= 0) {
+                                    setIsRunning(false);
+                                    return 0;
+                                }
+                                return newTime;
+                            });
+                            lastRealTime += secondsPassed * 1000;
+                        }
+                    }, 200);
                 }
                 return () => clearInterval(interval);
             }, [isRunning, timeLeft]);
+
+            const currentCenterPass = useMemo(() => {
+                return (logs.length % 2 === 0) ? baseCenterPass : (baseCenterPass === 'home' ? 'away' : 'home');
+            }, [logs.length, baseCenterPass]);
 
             const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
@@ -67,8 +96,10 @@
             };
 
             const resetGame = () => {
-                if(confirm("Reset match data?")) {
+                if(confirm("Reset all match data? This cannot be undone.")) {
+                    localStorage.clear();
                     setLogs([]); setQuarter(1); setTimeLeft(900); setIsRunning(false);
+                    setHomeName('Home'); setAwayName('Away'); setBaseCenterPass('home');
                 }
             };
 
@@ -77,9 +108,10 @@
 
             return (
                 <div className="max-w-xl mx-auto min-h-screen flex flex-col font-sans select-none pb-8">
+                    {/* Header Controls */}
                     <div className="bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-md">
                         <div className="flex justify-between items-center mb-3">
-                            <span className="text-lg font-black italic text-blue-400 tracking-wider">NETBALL PRO</span>
+                            <span className="text-lg font-black italic text-rose-400 tracking-wider">NETBALL PRO</span>
                             <div className="bg-slate-800 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300">Quarter {quarter}</div>
                         </div>
                         <div className="flex items-center justify-between bg-slate-800 rounded-xl p-3 border border-slate-700">
@@ -88,11 +120,12 @@
                                 <button onClick={() => setIsRunning(!isRunning)} className={`p-2.5 rounded-full transition-all active:scale-90 ${isRunning ? 'bg-amber-500 shadow-amber-900/20' : 'bg-emerald-500 shadow-emerald-900/20 shadow-lg'}`}>
                                     {isRunning ? <Pause size={20} fill="white" /> : <Play size={20} fill="white" />}
                                 </button>
-                                <button onClick={() => setTimeLeft(900)} className="p-2.5 rounded-full bg-slate-700 active:bg-slate-600 transition-colors"><RotateCcw size={20} /></button>
+                                <button onClick={() => { if(confirm("Reset clock to 15:00?")) setTimeLeft(900); }} className="p-2.5 rounded-full bg-slate-700 active:bg-slate-600 transition-colors"><RotateCcw size={20} /></button>
                             </div>
                         </div>
                     </div>
 
+                    {/* Tabs */}
                     <div className="flex bg-white border-b border-slate-200">
                         <button onClick={() => setActiveTab('score')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-[0.15em] transition-all ${activeTab === 'score' ? 'tab-active' : 'text-slate-400'}`}>Scoring</button>
                         <button onClick={() => setActiveTab('logs')} className={`flex-1 py-4 font-bold text-xs uppercase tracking-[0.15em] transition-all ${activeTab === 'logs' ? 'tab-active' : 'text-slate-400'}`}>Log ({logs.length})</button>
@@ -101,34 +134,39 @@
                     <div className="p-4 flex-1">
                         {activeTab === 'score' ? (
                             <div className="flex flex-col gap-5">
+                                {/* Score View */}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'home' ? 'border-blue-500 ring-4 ring-blue-50 shadow-lg translate-y-[-2px]' : 'border-transparent opacity-80'}`}>
+                                    {/* Home Team Card - Now Red */}
+                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'home' ? 'border-rose-500 ring-4 ring-rose-50 shadow-lg' : 'border-transparent opacity-80'}`}>
                                         <input value={homeName} onChange={e => setHomeName(e.target.value)} className="w-full text-center font-black text-slate-400 mb-1 bg-transparent text-[10px] uppercase outline-none" />
-                                        <div className="text-6xl font-black text-center mb-4 text-blue-600 tabular-nums">{homeScore}</div>
+                                        <div className="text-6xl font-black text-center mb-4 text-rose-600 tabular-nums">{homeScore}</div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button onClick={() => addGoal('home', 'GS')} className="bg-blue-600 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-blue-800 active:scale-95 transition-all">GS</button>
-                                            <button onClick={() => addGoal('home', 'GA')} className="bg-blue-500 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-blue-700 active:scale-95 transition-all">GA</button>
+                                            <button onClick={() => addGoal('home', 'GS')} className="bg-rose-600 text-white py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all">GS</button>
+                                            <button onClick={() => addGoal('home', 'GA')} className="bg-rose-500 text-white py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all">GA</button>
                                         </div>
                                     </div>
-                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'away' ? 'border-rose-500 ring-4 ring-rose-50 shadow-lg translate-y-[-2px]' : 'border-transparent opacity-80'}`}>
+                                    {/* Away Team Card - Now Blue */}
+                                    <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'away' ? 'border-blue-500 ring-4 ring-blue-50 shadow-lg' : 'border-transparent opacity-80'}`}>
                                         <input value={awayName} onChange={e => setAwayName(e.target.value)} className="w-full text-center font-black text-slate-400 mb-1 bg-transparent text-[10px] uppercase outline-none" />
-                                        <div className="text-6xl font-black text-center mb-4 text-rose-600 tabular-nums">{awayScore}</div>
+                                        <div className="text-6xl font-black text-center mb-4 text-blue-600 tabular-nums">{awayScore}</div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button onClick={() => addGoal('away', 'GS')} className="bg-rose-600 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-rose-800 active:scale-95 transition-all">GS</button>
-                                            <button onClick={() => addGoal('away', 'GA')} className="bg-rose-500 text-white py-4 rounded-xl font-black text-xl shadow-md active:bg-rose-700 active:scale-95 transition-all">GA</button>
+                                            <button onClick={() => addGoal('away', 'GS')} className="bg-blue-600 text-white py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all">GS</button>
+                                            <button onClick={() => addGoal('away', 'GA')} className="bg-blue-500 text-white py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all">GA</button>
                                         </div>
                                     </div>
                                 </div>
 
+                                {/* Center Pass Controls */}
                                 <div className="flex flex-col items-center gap-3 py-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
                                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Next Center Pass</div>
                                     <div className="flex items-center gap-8">
-                                        <div className={`h-4 w-4 rounded-full transition-all duration-500 ${currentCenterPass === 'home' ? 'bg-blue-500 scale-125 shadow-lg shadow-blue-200' : 'bg-slate-200'}`}></div>
+                                        <div className={`h-4 w-4 rounded-full transition-all duration-500 ${currentCenterPass === 'home' ? 'bg-rose-500 scale-125 shadow-lg shadow-rose-200' : 'bg-slate-200'}`}></div>
                                         <button onClick={() => setBaseCenterPass(baseCenterPass === 'home' ? 'away' : 'home')} className="text-[10px] font-bold text-slate-500 border border-slate-200 px-6 py-2 rounded-full hover:bg-slate-50 active:bg-slate-100 uppercase tracking-widest transition-colors">Toggle</button>
-                                        <div className={`h-4 w-4 rounded-full transition-all duration-500 ${currentCenterPass === 'away' ? 'bg-rose-500 scale-125 shadow-lg shadow-rose-200' : 'bg-slate-200'}`}></div>
+                                        <div className={`h-4 w-4 rounded-full transition-all duration-500 ${currentCenterPass === 'away' ? 'bg-blue-500 scale-125 shadow-lg shadow-blue-200' : 'bg-slate-200'}`}></div>
                                     </div>
                                 </div>
 
+                                {/* Action Buttons */}
                                 <div className="flex gap-3">
                                     <button onClick={undoLast} disabled={logs.length === 0} className="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 py-4 rounded-xl font-bold text-xs text-slate-600 active:bg-slate-50 disabled:opacity-30 transition-all">
                                         <UndoIcon size={16} /> UNDO LAST
@@ -136,13 +174,14 @@
                                     <button onClick={() => setQuarter(q => Math.min(4, q + 1))} className="flex-[1.5] bg-slate-800 text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest active:bg-slate-900 shadow-lg">Next Quarter</button>
                                 </div>
 
+                                {/* Period Summaries */}
                                 <div className="bg-white rounded-2xl p-4 border border-slate-200">
                                     <div className="grid grid-cols-4 gap-2">
                                         {[1, 2, 3, 4].map(q => {
                                             const qH = logs.filter(l => l.team === 'home' && l.quarter === q).length;
                                             const qA = logs.filter(l => l.team === 'away' && l.quarter === q).length;
                                             return (
-                                                <div key={q} className={`text-center p-3 rounded-xl border transition-all ${quarter === q ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-50' : 'bg-slate-50 border-transparent'}`}>
+                                                <div key={q} className={`text-center p-3 rounded-xl border transition-all ${quarter === q ? 'bg-rose-50 border-rose-200 ring-2 ring-rose-50' : 'bg-slate-50 border-transparent'}`}>
                                                     <div className="text-[9px] font-bold text-slate-400 mb-1">Q{q}</div>
                                                     <div className="text-sm font-black text-slate-700 tabular-nums">{qH}-{qA}</div>
                                                 </div>
@@ -153,14 +192,15 @@
                                 <button onClick={resetGame} className="self-center mt-2 p-3 text-slate-300 hover:text-red-400 transition-colors active:scale-90"><Trash size={22} /></button>
                             </div>
                         ) : (
+                            // Historic Logs View
                             <div className="flex flex-col gap-2 pb-10">
                                 {logs.length === 0 ? (
                                     <div className="text-center py-20 text-slate-300 font-medium italic text-sm">No goals in the log yet...</div>
                                 ) : (
-                                    logs.map((log) => (
-                                        <div key={log.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 shadow-sm animate-in slide-in-from-top-2 duration-300">
+                                    logs.map((log, index) => (
+                                        <div key={log.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
                                             <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white shadow-sm ${log.team === 'home' ? 'bg-blue-600' : 'bg-rose-600'}`}>
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white shadow-sm ${log.team === 'home' ? 'bg-rose-600' : 'bg-blue-600'}`}>
                                                     {log.shooter}
                                                 </div>
                                                 <div>
@@ -168,7 +208,7 @@
                                                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Q{log.quarter} • {log.time} Left</div>
                                                 </div>
                                             </div>
-                                            <div className="text-[10px] font-bold text-slate-200 tabular-nums">#{logs.length - logs.indexOf(log)}</div>
+                                            <div className="text-[10px] font-bold text-slate-200 tabular-nums">#{logs.length - index}</div>
                                         </div>
                                     ))
                                 )}
