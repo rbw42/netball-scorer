@@ -4,10 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Netball Scorer Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS (Stable Browser CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Core React & React-DOM CDN links -->
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+    <!-- Babel compiler for in-browser transpilation of JSX -->
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.26.4/babel.min.js"></script>
     <style>
         body { overscroll-behavior-y: none; background-color: #f1f5f9; }
         * { -webkit-tap-highlight-color: transparent; }
@@ -18,8 +21,11 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        /** @jsxRuntime classic */
+
         const { useState, useEffect, useMemo } = React;
 
+        // Secure utility to load state from localStorage safely to prevent crash on corrupted data
         const getStorage = (key, fallback) => {
             const saved = localStorage.getItem(key);
             if (!saved) return fallback;
@@ -45,6 +51,7 @@
             const [quarter, setQuarter] = useState(() => getStorage('nb_quarter', 1));
             const [baseCenterPass, setBaseCenterPass] = useState(() => getStorage('nb_basePass', 'home'));
             
+            // Ephemeral, temporary states for active session tracking
             const [isRunning, setIsRunning] = useState(false);
             const [activeTab, setActiveTab] = useState('score');
 
@@ -60,6 +67,8 @@
                 if (isRunning && timeLeft > 0) {
                     let lastRealTime = Date.now();
                     
+                    // High-resolution interval polling (200ms) to ensure responsive rendering
+                    // but calculates exact epoch time delta so mobile sleep/background pauses do not lose time
                     interval = setInterval(() => {
                         const now = Date.now();
                         const secondsPassed = Math.floor((now - lastRealTime) / 1000);
@@ -80,6 +89,7 @@
                 return () => clearInterval(interval);
             }, [isRunning, timeLeft]);
 
+            // Alternates ownership dynamically based on count of goals logged (even = initial selector, odd = opponent)
             const currentCenterPass = useMemo(() => {
                 return (logs.length % 2 === 0) ? baseCenterPass : (baseCenterPass === 'home' ? 'away' : 'home');
             }, [logs.length, baseCenterPass]);
@@ -108,6 +118,7 @@
 
             return (
                 <div className="max-w-xl mx-auto min-h-screen flex flex-col font-sans select-none pb-8">
+
                     {/* Header Controls */}
                     <div className="bg-slate-900 text-white p-4 sticky top-0 z-20 shadow-md">
                         <div className="flex justify-between items-center mb-3">
@@ -134,9 +145,10 @@
                     <div className="p-4 flex-1">
                         {activeTab === 'score' ? (
                             <div className="flex flex-col gap-5">
+
                                 {/* Score View */}
                                 <div className="grid grid-cols-2 gap-3">
-                                    {/* Home Team Card - Now Red */}
+                                    {/* Home Team Card - Active color is Rose/Red */}
                                     <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'home' ? 'border-rose-500 ring-4 ring-rose-50 shadow-lg' : 'border-transparent opacity-80'}`}>
                                         <input value={homeName} onChange={e => setHomeName(e.target.value)} className="w-full text-center font-black text-slate-400 mb-1 bg-transparent text-[10px] uppercase outline-none" />
                                         <div className="text-6xl font-black text-center mb-4 text-rose-600 tabular-nums">{homeScore}</div>
@@ -145,7 +157,7 @@
                                             <button onClick={() => addGoal('home', 'GA')} className="bg-rose-500 text-white py-4 rounded-xl font-black text-xl shadow-md active:scale-95 transition-all">GA</button>
                                         </div>
                                     </div>
-                                    {/* Away Team Card - Now Blue */}
+                                    {/* Away Team Card - Active color is Blue */}
                                     <div className={`p-4 rounded-2xl bg-white border-2 transition-all duration-300 ${currentCenterPass === 'away' ? 'border-blue-500 ring-4 ring-blue-50 shadow-lg' : 'border-transparent opacity-80'}`}>
                                         <input value={awayName} onChange={e => setAwayName(e.target.value)} className="w-full text-center font-black text-slate-400 mb-1 bg-transparent text-[10px] uppercase outline-none" />
                                         <div className="text-6xl font-black text-center mb-4 text-blue-600 tabular-nums">{awayScore}</div>
@@ -192,7 +204,6 @@
                                 <button onClick={resetGame} className="self-center mt-2 p-3 text-slate-300 hover:text-red-400 transition-colors active:scale-90"><Trash size={22} /></button>
                             </div>
                         ) : (
-                            // Historic Logs View
                             <div className="flex flex-col gap-2 pb-10">
                                 {logs.length === 0 ? (
                                     <div className="text-center py-20 text-slate-300 font-medium italic text-sm">No goals in the log yet...</div>
